@@ -1,91 +1,138 @@
 /*
   ARQUIVO: app.js
-  O QUE É: a lógica do site. Ele faz quatro coisas:
-    1. Abre o fluxo de perguntas do direito escolhido.
-    2. Guarda as respostas e mostra o progresso.
-    3. Calcula as possibilidades (regras de elegibilidade) e mostra o resultado.
-    4. Conversa com o assistente, enviando a dúvida ao servidor (assistente.py).
+  O QUE É: a lógica do site. Ele faz cinco coisas:
+    1. Exige o aceite do consentimento antes de liberar os direitos.
+    2. Abre o fluxo de perguntas do direito escolhido (BPC, aposentadoria, Bolsa Família, CRAS).
+    3. Guarda as respostas e mostra o progresso (só na tela; some ao fechar a página).
+    4. Calcula uma ORIENTAÇÃO de possibilidade e mostra documentos e onde ir.
+    5. Conversa com o assistente, enviando a dúvida ao servidor (assistente.py).
 
-  IMPORTANTE: as regras de renda e idade ficam no bloco "REGRAS" logo abaixo.
-  Os valores (limites de renda, salário mínimo) mudam com o tempo.
+  IMPORTANTE: os valores do bloco REGRAS mudam com o tempo.
   Confira sempre a legislação vigente antes de publicar.
 */
 
 /* =========================================================================
-   REGRAS: valores usados para decidir a possibilidade de cada direito
-   Edite AQUI quando os valores oficiais mudarem.
+   REGRAS: valores usados nas contas. Edite AQUI quando mudarem.
    ========================================================================= */
 const REGRAS = {
-  /* Salário mínimo vigente. Usado para calcular o limite do BPC (um quarto do salário). */
+  /* Salário mínimo vigente. CONFERIR o valor atual. */
   SALARIO_MINIMO: 1621,
 
-  /* Limite de renda por pessoa para o Bolsa Família, em reais por mês. */
-  LIMITE_BOLSA_PER_CAPITA: 218,
+  /* BPC: renda por pessoa do grupo familiar deve ser menor que 1/4 do salário mínimo. */
+  BPC_LIMITE_PER_CAPITA: 1621 / 4,
 
-  /* Idade mínima para o BPC do idoso. */
-  IDADE_MINIMA_BPC_IDOSO: 65,
+  /* Idade a partir da qual a pessoa idosa tem direito ao BPC (sem precisar de deficiência). */
+  BPC_IDADE_IDOSO: 65,
 
-  /* Tempo de contribuição de referência usado apenas como orientação simples. */
-  ANOS_CONTRIBUICAO_REFERENCIA: 15
+  /* Bolsa Família: renda por pessoa de referência. CONFERIR o valor atual. */
+  BOLSA_LIMITE_PER_CAPITA: 218,
+
+  /* Aposentadoria por idade: idades mínimas (regra permanente). */
+  APOSENT_IDADE_URBANA: { homem: 65, mulher: 62 },
+  APOSENT_IDADE_RURAL: { homem: 60, mulher: 55 },
+
+  /* Carência: 180 contribuições mensais, ou seja, 15 anos. */
+  APOSENT_ANOS_CARENCIA: 15
 };
 
 /* =========================================================================
-   FLUXOS: as perguntas de cada direito, na ordem em que aparecem.
+   FLUXOS: perguntas de cada direito, na ordem em que aparecem.
    Cada pergunta tem:
-     id    -> nome interno da resposta (ex.: "renda")
+     id    -> nome interno da resposta
      tipo  -> "numero" (campo para digitar) ou "sim_nao" (dois botões)
      texto -> o que aparece para a pessoa
+     se    -> (opcional) função que diz se a pergunta deve aparecer,
+              com base nas respostas anteriores
    ========================================================================= */
 const FLUXOS = {
-  bolsa: [
-    { id: "pessoas", tipo: "numero", texto: "Quantas pessoas moram na sua casa, incluindo você?" },
-    { id: "renda",   tipo: "numero", texto: "Qual é a renda total mensal da família, em reais? (Se não houver renda, digite 0.)" },
-    { id: "filhos",  tipo: "sim_nao", texto: "Há crianças, adolescentes ou gestantes na família?" }
-  ],
   bpc: [
-    { id: "idade",       tipo: "numero",  texto: "Qual é a sua idade?" },
-    { id: "deficiencia", tipo: "sim_nao", texto: "Você tem alguma deficiência de longo prazo que dificulte sua participação na sociedade?" },
-    { id: "pessoas",     tipo: "numero",  texto: "Quantas pessoas moram na sua casa, incluindo você?" },
-    { id: "renda",       tipo: "numero",  texto: "Qual é a renda total mensal da família, em reais? (Se não houver renda, digite 0.)" }
+    { id: "idade", tipo: "numero",
+      texto: "Qual é a idade da pessoa que vai pedir o BPC?" },
+    { id: "deficiencia", tipo: "sim_nao",
+      texto: "A pessoa tem alguma doença, deficiência ou limitação?",
+      se: (r) => r.idade < REGRAS.BPC_IDADE_IDOSO },
+    { id: "impedimento", tipo: "sim_nao",
+      texto: "Essa condição dificulta a participação na sociedade em igualdade com outras pessoas, e já dura ou deve durar pelo menos 2 anos?",
+      se: (r) => r.idade < REGRAS.BPC_IDADE_IDOSO && r.deficiencia === true },
+    { id: "barreiras", tipo: "sim_nao",
+      texto: "A pessoa precisa de ajuda para tomar banho, se alimentar, andar, estudar, trabalhar ou sair de casa, ou enfrenta outras barreiras para participar da sociedade?",
+      se: (r) => r.idade < REGRAS.BPC_IDADE_IDOSO && r.deficiencia === true },
+    { id: "membros", tipo: "numero",
+      texto: "Quantas pessoas do grupo familiar moram sob o mesmo teto, incluindo a pessoa que pede? (Entram cônjuge ou companheiro, pais, irmãos solteiros, filhos solteiros e menores tutelados.)" },
+    { id: "renda", tipo: "numero",
+      texto: "Qual é a renda mensal somada do grupo familiar, em reais? (Digite 0 se não houver renda.)" },
+    { id: "outroBeneficio", tipo: "sim_nao",
+      texto: "Alguém do grupo familiar recebe BPC ou outro benefício de até um salário mínimo?" }
   ],
+
   aposentadoria: [
-    { id: "idade",        tipo: "numero",  texto: "Qual é a sua idade?" },
-    { id: "contribuicao", tipo: "sim_nao", texto: "Você já contribuiu para o INSS (com carteira assinada, como autônomo ou como contribuinte individual)?" },
-    { id: "anos",         tipo: "numero",  texto: "Aproximadamente quantos anos de contribuição você tem?" }
+    { id: "idade", tipo: "numero",
+      texto: "Qual é a sua idade?" },
+    { id: "mulher", tipo: "sim_nao",
+      texto: "Você é mulher?" },
+    { id: "rural", tipo: "sim_nao",
+      texto: "Você trabalhou principalmente no campo (atividade rural)?" },
+    { id: "contribuiu", tipo: "sim_nao",
+      texto: "Já contribuiu para o INSS (com carteira assinada, como autônomo, contribuinte individual ou de forma facultativa)?" },
+    { id: "anos", tipo: "numero",
+      texto: "Aproximadamente quantos anos de contribuição ao INSS você acredita ter?",
+      se: (r) => r.contribuiu === true },
+    { id: "pendencia", tipo: "sim_nao",
+      texto: "Existem períodos sem registro no CNIS, ou contribuições pagas em atraso ou abaixo do mínimo?",
+      se: (r) => r.contribuiu === true },
+    { id: "docsRurais", tipo: "sim_nao",
+      texto: "Você tem documentos da época do trabalho rural (notas de produtor, contratos, cadastro rural)?",
+      se: (r) => r.rural === true }
   ],
+
+  bolsa: [
+    { id: "pessoas", tipo: "numero",
+      texto: "Quantas pessoas moram na sua casa, incluindo você?" },
+    { id: "renda", tipo: "numero",
+      texto: "Qual é a renda total mensal da família, em reais? (Digite 0 se não houver renda.)" },
+    { id: "filhos", tipo: "sim_nao",
+      texto: "Há crianças, adolescentes ou gestantes na família?" }
+  ],
+
   cras: [
-    { id: "pessoas",       tipo: "numero",  texto: "Quantas pessoas moram na sua casa, incluindo você?" },
-    { id: "vulnerabilidade", tipo: "sim_nao", texto: "Você passa por dificuldade para pagar contas básicas, como comida, aluguel ou remédios?" }
+    { id: "pessoas", tipo: "numero",
+      texto: "Quantas pessoas moram na sua casa, incluindo você?" },
+    { id: "vulnerabilidade", tipo: "sim_nao",
+      texto: "Você tem dificuldade para pagar contas básicas, como comida, aluguel ou remédios?" }
   ]
 };
 
-/* Nome bonito de cada direito, usado nos títulos e no progresso. */
+/* Nome bonito de cada direito. */
 const NOMES = {
-  bolsa: "Bolsa Família",
   bpc: "BPC",
-  aposentadoria: "Aposentadoria",
+  aposentadoria: "Aposentadoria por idade",
+  bolsa: "Bolsa Família",
   cras: "Atendimento no CRAS"
 };
 
-/* Lista de documentos que costumam ser pedidos. Pode variar: sempre confirmar no local. */
+/* Documentos que costumam ser pedidos. Pode variar: confirmar no local. */
 const DOCUMENTOS = {
+  bpc: [
+    "Documento com foto e CPF da pessoa que pede",
+    "CPF e documento de todas as pessoas do grupo familiar",
+    "Cadastro Único atualizado",
+    "Laudos, exames ou relatórios médicos atualizados (no caso de deficiência)",
+    "Comprovante de residência",
+    "Comprovantes de renda da família"
+  ],
+  aposentadoria: [
+    "Documento com foto e CPF",
+    "Extrato do CNIS atualizado (pelo Meu INSS)",
+    "Carteira de trabalho, carnês ou comprovantes de pagamento ao INSS",
+    "Contratos, holerites ou termos de rescisão, se houver",
+    "Documentos da época do trabalho rural, se houver",
+    "Carta de indeferimento ou protocolo, se já tiver pedido"
+  ],
   bolsa: [
     "Documento com foto (RG ou CNH)",
     "CPF de todas as pessoas da família",
     "Cadastro Único atualizado (se não tiver, o CRAS faz o cadastro)",
     "Comprovante de residência"
-  ],
-  bpc: [
-    "Documento com foto e CPF",
-    "Comprovante de residência",
-    "Laudos e exames que comprovem a deficiência ou a condição de saúde",
-    "Documentos que comprovem a renda da família"
-  ],
-  aposentadoria: [
-    "Documento com foto e CPF",
-    "Carteira de trabalho ou carnês de contribuição",
-    "Documentos que comprovem o tempo de contribuição",
-    "Certidão de nascimento ou de casamento, se aplicável"
   ],
   cras: [
     "Documento com foto e CPF",
@@ -97,57 +144,60 @@ const DOCUMENTOS = {
 /* =========================================================================
    ESTADO: informações que mudam enquanto a pessoa usa o site
    ========================================================================= */
-let direitoAtual = null;   // qual direito está sendo verificado agora
-let passoAtual = 0;        // número da pergunta atual (começa em 0)
-let respostas = {};        // guarda o que a pessoa respondeu, ex.: { renda: 300 }
-let historicoChat = [];    // mensagens do chat, para o assistente lembrar do que foi dito
+let direitoAtual = null;   // qual direito está sendo verificado
+let passoAtual = 0;        // posição da pergunta atual na lista ativa
+let respostas = {};        // o que a pessoa respondeu, ex.: { renda: 300 }
+let historicoChat = [];    // mensagens do chat, para o assistente ter contexto
 
-/* Atalho para pegar um elemento da página pelo id, sem repetir document.getElementById. */
+/* Atalho para pegar um elemento pelo id. */
 const $ = (id) => document.getElementById(id);
 
-/* Mostra apenas uma das telas (inicio, perguntas ou resultado) e esconde as outras. */
+/* Perguntas que devem aparecer agora, com base nas respostas dadas até aqui. */
+function perguntasAtivas() {
+  return FLUXOS[direitoAtual].filter((p) => !p.se || p.se(respostas));
+}
+
+/* Mostra apenas uma tela (inicio, perguntas ou resultado). */
 function mostrarTela(nome) {
   $("tela-inicio").hidden = nome !== "inicio";
   $("tela-perguntas").hidden = nome !== "perguntas";
   $("tela-resultado").hidden = nome !== "resultado";
-  window.scrollTo({ top: 0, behavior: "smooth" }); // sobe para o topo ao trocar de tela
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 /* Começa o fluxo de um direito: zera as respostas e mostra a primeira pergunta. */
 function iniciarFluxo(direito) {
   direitoAtual = direito;
   passoAtual = 0;
-  respostas = {}; // limpa respostas de uma verificação anterior
+  respostas = {};
   mostrarTela("perguntas");
   mostrarPergunta();
 }
 
-/* Desenha a pergunta atual na tela: título, campo ou botões, progresso e botões de navegação. */
+/* Desenha a pergunta atual: título, campo ou botões, progresso e navegação. */
 function mostrarPergunta() {
-  const lista = FLUXOS[direitoAtual];
+  const lista = perguntasAtivas();
   const pergunta = lista[passoAtual];
 
-  // Progresso: texto e barra. Ex.: "Bolsa Família · pergunta 2 de 3".
   $("progresso-texto").textContent = `${NOMES[direitoAtual]} · pergunta ${passoAtual + 1} de ${lista.length}`;
   $("progresso-barra").style.width = `${((passoAtual + 1) / lista.length) * 100}%`;
-
   $("pergunta-titulo").textContent = pergunta.texto;
 
   const corpo = $("pergunta-corpo");
-  corpo.innerHTML = ""; // limpa a pergunta anterior
+  corpo.innerHTML = "";
 
   if (pergunta.tipo === "numero") {
-    // Campo para digitar um número (ex.: renda, idade).
+    // Campo para digitar um número.
     const campo = document.createElement("input");
     campo.type = "number";
     campo.min = "0";
-    campo.inputMode = "numeric";  // abre teclado numérico no celular
+    campo.inputMode = "numeric";   // teclado numérico no celular
     campo.id = "campo-numero";
     campo.className = "campo";
     campo.placeholder = "Digite um número";
     if (respostas[pergunta.id] !== undefined) campo.value = respostas[pergunta.id];
     corpo.appendChild(campo);
-    setTimeout(() => campo.focus(), 50); // deixa o cursor já no campo
+    setTimeout(() => campo.focus(), 50);
   } else {
     // Dois botões: Sim e Não.
     const grupo = document.createElement("div");
@@ -159,143 +209,184 @@ function mostrarPergunta() {
       botao.textContent = texto;
       if (respostas[pergunta.id] === valor) botao.classList.add("opcao--ativa");
       botao.addEventListener("click", () => {
-        respostas[pergunta.id] = valor; // guarda a escolha
+        respostas[pergunta.id] = valor;
         grupo.querySelectorAll(".opcao").forEach((b) => b.classList.remove("opcao--ativa"));
-        botao.classList.add("opcao--ativa"); // destaca a escolha feita
+        botao.classList.add("opcao--ativa");
       });
       grupo.appendChild(botao);
     });
     corpo.appendChild(grupo);
   }
 
-  // O botão Voltar não aparece na primeira pergunta.
   $("btn-voltar").hidden = passoAtual === 0;
-  // Na última pergunta, o botão muda para "Ver resultado".
   $("btn-proximo").textContent = passoAtual === lista.length - 1 ? "Ver resultado" : "Próxima";
 }
 
-/* Lê a resposta da pergunta atual e guarda. Devolve false se a pessoa não respondeu. */
+/* Lê e guarda a resposta da pergunta atual. Devolve false se faltou responder. */
 function guardarRespostaAtual() {
-  const pergunta = FLUXOS[direitoAtual][passoAtual];
+  const pergunta = perguntasAtivas()[passoAtual];
 
   if (pergunta.tipo === "numero") {
     const valor = $("campo-numero").value;
-    if (valor === "") return false;           // não deixa avançar sem digitar
-    respostas[pergunta.id] = Number(valor);   // converte o texto em número
+    if (valor === "") return false;
+    respostas[pergunta.id] = Number(valor);
     return true;
   }
-
-  // Para Sim/Não, confere se algum botão foi escolhido.
   return respostas[pergunta.id] !== undefined;
 }
 
 /* =========================================================================
-   CÁLCULO: decide a possibilidade de cada direito com base nas respostas.
-   Este resultado é uma ORIENTAÇÃO, não uma decisão oficial.
+   CÁLCULO: orientação de possibilidade. NÃO é decisão oficial.
+   Cada função devolve uma lista de frases para mostrar na tela.
    ========================================================================= */
-function calcularPossibilidades() {
+function calcularBPC() {
   const r = respostas;
-  const mensagens = [];
+  const msgs = [];
+  const idoso = r.idade >= REGRAS.BPC_IDADE_IDOSO;
+  const pcd = r.deficiencia === true && r.impedimento === true && r.barreiras === true;
+  const rendaPorPessoa = r.membros > 0 ? r.renda / r.membros : 0;
+  const limite = REGRAS.BPC_LIMITE_PER_CAPITA;
 
-  if (direitoAtual === "bolsa") {
-    // Renda por pessoa = renda total dividida pelo número de moradores.
-    const rendaPorPessoa = r.pessoas > 0 ? r.renda / r.pessoas : 0;
-    if (rendaPorPessoa <= REGRAS.LIMITE_BOLSA_PER_CAPITA) {
-      mensagens.push("Pela renda informada, a família pode ter direito ao Bolsa Família. A análise final depende do Cadastro Único e do CRAS.");
-    } else {
-      mensagens.push("Pela renda informada, a família pode estar acima do limite do Bolsa Família. Vale conversar com o CRAS, pois as regras podem mudar.");
-    }
-    if (r.filhos) {
-      mensagens.push("A presença de crianças, adolescentes ou gestantes pode dar prioridade no acompanhamento.");
-    }
+  if (!idoso && !pcd) {
+    msgs.push("Pelas respostas, o BPC pode não se aplicar agora, porque não há idade de 65 anos ou deficiência de longo prazo com barreiras. Procure o CRAS para uma orientação completa.");
+    return msgs;
   }
 
-  if (direitoAtual === "bpc") {
-    // O BPC usa renda por pessoa abaixo de um quarto do salário mínimo.
-    const limiteBpc = REGRAS.SALARIO_MINIMO / 4;
-    const rendaPorPessoa = r.pessoas > 0 ? r.renda / r.pessoas : 0;
-    const idosoElegivel = r.idade >= REGRAS.IDADE_MINIMA_BPC_IDOSO;
-    const pcdElegivel = r.deficiencia === true;
-
-    if ((idosoElegivel || pcdElegivel) && rendaPorPessoa < limiteBpc) {
-      mensagens.push("Pelo que você informou, pode ter direito ao BPC. A análise final é feita pelo INSS.");
-    } else {
-      mensagens.push("Pelas respostas, o BPC pode não se aplicar agora. Procure o CRAS para uma orientação completa.");
-    }
+  const quem = idoso ? "pessoa idosa" : "pessoa com deficiência";
+  if (rendaPorPessoa < limite * 0.8) {
+    msgs.push(`Possível BPC para ${quem}: a renda por pessoa do grupo familiar parece abaixo do limite. A análise final é do INSS.`);
+  } else if (rendaPorPessoa < limite * 1.2) {
+    msgs.push(`Necessidade de análise mais detalhada: a renda por pessoa está perto do limite do BPC. Procure o CRAS ou a Defensoria para conferir as exclusões previstas em lei.`);
+  } else {
+    msgs.push("Pelas respostas, a renda por pessoa parece acima do limite do BPC. Vale conferir com o CRAS, pois algumas despesas e exclusões podem mudar a conta.");
   }
 
-  if (direitoAtual === "aposentadoria") {
-    if (r.contribuicao === false) {
-      mensagens.push("Sem contribuição ao INSS, a aposentadoria por contribuição não se aplica. Converse com o CRAS sobre outras opções.");
-    } else if (r.anos >= REGRAS.ANOS_CONTRIBUICAO_REFERENCIA) {
-      mensagens.push("Você pode ter direito a alguma aposentadoria. O tipo e o tempo exato são definidos pelo INSS, com base no seu histórico.");
-    } else {
-      mensagens.push("Você ainda pode estar longe do tempo mínimo. O INSS calcula o tempo exato com base no seu histórico de contribuições.");
-    }
+  if (r.outroBeneficio === true) {
+    msgs.push("Como alguém da família já recebe BPC ou benefício de até um salário mínimo, esse valor costuma ficar fora do cálculo. Confirme isso com o CRAS.");
   }
-
-  if (direitoAtual === "cras") {
-    mensagens.push(r.vulnerabilidade
-      ? "O CRAS pode acompanhar você e encaminhar para benefícios e serviços. Procure a unidade mais próxima."
-      : "Você pode procurar o CRAS para se orientar sobre serviços e benefícios disponíveis.");
-  }
-
-  return mensagens;
+  return msgs;
 }
 
-/* Monta a tela de resultado com as possibilidades, os documentos e os links de mapa. */
-function mostrarResultado() {
-  const possibilidades = calcularPossibilidades();
+function calcularAposentadoria() {
+  const r = respostas;
+  const msgs = [];
+  const idadeMin = r.rural
+    ? (r.mulher ? REGRAS.APOSENT_IDADE_RURAL.mulher : REGRAS.APOSENT_IDADE_RURAL.homem)
+    : (r.mulher ? REGRAS.APOSENT_IDADE_URBANA.mulher : REGRAS.APOSENT_IDADE_URBANA.homem);
 
-  // Caixa verde com as possibilidades, uma linha por item.
+  if (r.idade < idadeMin) {
+    msgs.push(`Ainda não atingiu a idade mínima de ${idadeMin} anos para a aposentadoria por idade. Se você já era filiado antes da Reforma de 2019, existem regras de transição: peça ao INSS a análise.`);
+    return msgs;
+  }
+
+  if (!r.contribuiu && !r.rural) {
+    msgs.push("Sem contribuição ao INSS, a aposentadoria por idade não se aplica pela via contributiva. Procure o CRAS para conhecer outras opções.");
+    return msgs;
+  }
+
+  if (!r.contribuiu && r.rural) {
+    msgs.push(r.docsRurais
+      ? "Possível aposentadoria rural: confirme o período de trabalho no campo com os documentos da época. Prova só testemunhal normalmente não basta."
+      : "A aposentadoria rural depende de comprovar o trabalho no campo. Procure o CRAS ou o sindicato rural para reunir documentos.");
+    return msgs;
+  }
+
+  if (r.pendencia === true) {
+    msgs.push("Necessidade de conferência: há pendências no CNIS ou contribuições em atraso. Confira o extrato no Meu INSS antes do pedido.");
+  }
+
+  if (r.anos >= REGRAS.APOSENT_ANOS_CARENCIA) {
+    msgs.push(r.rural
+      ? "Possível aposentadoria híbrida: tempo urbano e rural podem ser somados. O INSS confirma a regra exata."
+      : "Possível aposentadoria urbana por idade. A carência é de 180 contribuições (15 anos). A regra exata depende da data de filiação; o INSS confirma.");
+  } else {
+    msgs.push(`Ainda pode faltar tempo de contribuição: são necessários pelo menos ${REGRAS.APOSENT_ANOS_CARENCIA} anos (180 contribuições). Confira o CNIS para ver o tempo real.`);
+  }
+  return msgs;
+}
+
+function calcularBolsa() {
+  const r = respostas;
+  const rendaPorPessoa = r.pessoas > 0 ? r.renda / r.pessoas : 0;
+  const msgs = [];
+  msgs.push(rendaPorPessoa <= REGRAS.BOLSA_LIMITE_PER_CAPITA
+    ? "Pela renda informada, a família pode ter direito ao Bolsa Família. A análise final depende do Cadastro Único e do CRAS."
+    : "Pela renda informada, a família pode estar acima do limite do Bolsa Família. Vale conversar com o CRAS, pois as regras podem mudar.");
+  if (r.filhos === true) {
+    msgs.push("A presença de crianças, adolescentes ou gestantes pode dar prioridade no acompanhamento.");
+  }
+  return msgs;
+}
+
+function calcularCras() {
+  return [respostas.vulnerabilidade === true
+    ? "O CRAS pode acompanhar você e encaminhar para benefícios e serviços. Procure a unidade mais próxima."
+    : "Você pode procurar o CRAS para se orientar sobre serviços e benefícios disponíveis."];
+}
+
+const CALCULOS = {
+  bpc: calcularBPC,
+  aposentadoria: calcularAposentadoria,
+  bolsa: calcularBolsa,
+  cras: calcularCras
+};
+
+/* Monta a tela de resultado. */
+function mostrarResultado() {
+  const possibilidades = CALCULOS[direitoAtual]();
+
   $("resultado-corpo").innerHTML =
     '<div class="caixa-resultado">' +
     possibilidades.map((texto) => `<p>${texto}</p>`).join("") +
     "</div>";
 
-  // Lista de documentos do direito escolhido.
   $("lista-documentos").innerHTML = DOCUMENTOS[direitoAtual]
     .map((doc) => `<li>${doc}</li>`)
     .join("");
 
-  atualizarLinksLocal(); // preenche os links de mapa (podem estar sem o local ainda)
+  atualizarLinksLocal();
   mostrarTela("resultado");
 }
 
-/* Cria os links para o CRAS e a Defensoria mais próximos. O bairro ou CEP digitado entra na busca. */
+/* Links de mapa para o CRAS e a Defensoria, usando o bairro ou CEP digitado. */
 function atualizarLinksLocal() {
-  const local = $("campo-local").value.trim();
-  // encodeURIComponent deixa o texto seguro para usar dentro de um link.
-  const busca = encodeURIComponent(local);
-
+  const busca = encodeURIComponent($("campo-local").value.trim());
   $("links-local").innerHTML =
     `<a class="link-local" target="_blank" rel="noopener" href="https://www.google.com/maps/search/CRAS+${busca}">📍 Ver CRAS mais próximo no mapa</a>` +
     `<a class="link-local" target="_blank" rel="noopener" href="https://www.google.com/maps/search/Defensoria+P%C3%BAblica+${busca}">📍 Ver Defensoria Pública mais próxima no mapa</a>`;
 }
 
 /* =========================================================================
-   CHAT: envia a dúvida ao servidor e mostra a resposta na janela
+   CONSENTIMENTO: os cartões de direito só liberam depois do aceite.
    ========================================================================= */
+const aceite = $("aceite");
+function atualizarAceite() {
+  document.querySelectorAll("[data-direito]").forEach((cartao) => {
+    cartao.disabled = !aceite.checked;
+  });
+}
+aceite.addEventListener("change", atualizarAceite);
+atualizarAceite();
 
-/* Acrescenta um balão na janela do chat. "tipo" é "usuario" ou "assistente". */
+/* =========================================================================
+   CHAT: envia a dúvida ao servidor e mostra a resposta
+   ========================================================================= */
 function adicionarBalao(texto, tipo) {
   const balao = document.createElement("div");
   balao.className = `balao balao--${tipo}`;
-  balao.textContent = texto; // textContent evita que o texto seja interpretado como código
+  balao.textContent = texto; // textContent: o texto nunca vira código
   $("mensagens").appendChild(balao);
   rolarParaFim();
   return balao;
 }
 
-/* Mantém a conversa sempre mostrando a mensagem mais nova. */
 function rolarParaFim() {
   const area = $("mensagens");
   area.scrollTop = area.scrollHeight;
 }
 
-/* Envia a pergunta da pessoa ao servidor e mostra a resposta. */
 async function enviarChat(evento) {
-  evento.preventDefault(); // impede que o formulário recarregue a página
+  evento.preventDefault();
 
   const campo = $("campo-chat");
   const pergunta = campo.value.trim();
@@ -305,46 +396,43 @@ async function enviarChat(evento) {
   campo.value = "";
   historicoChat.push({ papel: "usuario", texto: pergunta });
 
-  // Balão de "pensando..." enquanto a resposta não chega.
   const aguardando = adicionarBalao("", "assistente");
   aguardando.innerHTML = '<span class="digitando"><span></span><span></span><span></span></span>';
 
   try {
-    // Chamada ao servidor (assistente.py), que é quem guarda a chave da API.
     const resposta = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ mensagem: pergunta, historico: historicoChat.slice(-6) })
     });
-
     const dados = await resposta.json();
-
-    if (!resposta.ok) {
-      throw new Error(dados.erro || "Não consegui responder agora.");
-    }
+    if (!resposta.ok) throw new Error(dados.erro || "Erro");
 
     aguardando.textContent = dados.resposta;
     historicoChat.push({ papel: "assistente", texto: dados.resposta });
   } catch (erro) {
-    // Se algo falhar, mostra uma mensagem simples em vez de travar a tela.
     aguardando.textContent = "Não consegui responder agora. Tente de novo em instantes, ou procure o CRAS.";
   }
   rolarParaFim();
 }
 
 /* =========================================================================
-   LIGAÇÕES: conecta os botões e campos da página às funções acima
+   LIGAÇÕES: conecta botões e campos às funções acima
    ========================================================================= */
 
-// Os quatro cartões da tela inicial: cada um abre o fluxo do seu direito.
+// Cartões de direito: abrem o fluxo do direito escolhido.
 document.querySelectorAll("[data-direito]").forEach((cartao) => {
-  cartao.addEventListener("click", () => iniciarFluxo(cartao.dataset.direito));
+  cartao.addEventListener("click", () => {
+    if (!aceite.checked) return; // segurança extra: sem aceite, nada abre
+    iniciarFluxo(cartao.dataset.direito);
+  });
 });
 
-// Botão "Próxima": valida a resposta, avança ou mostra o resultado.
+// Próxima: valida, avança ou mostra o resultado.
 $("btn-proximo").addEventListener("click", () => {
-  if (!guardarRespostaAtual()) return; // se não respondeu, fica na mesma pergunta
-  if (passoAtual < FLUXOS[direitoAtual].length - 1) {
+  if (!guardarRespostaAtual()) return;
+  const lista = perguntasAtivas();
+  if (passoAtual < lista.length - 1) {
     passoAtual++;
     mostrarPergunta();
   } else {
@@ -352,7 +440,7 @@ $("btn-proximo").addEventListener("click", () => {
   }
 });
 
-// Botão "Voltar": volta uma pergunta, se possível.
+// Voltar: uma pergunta para trás.
 $("btn-voltar").addEventListener("click", () => {
   if (passoAtual > 0) {
     passoAtual--;
@@ -360,13 +448,13 @@ $("btn-voltar").addEventListener("click", () => {
   }
 });
 
-// Campo do bairro/CEP: atualiza os links de mapa a cada letra digitada.
+// Bairro ou CEP: atualiza os links a cada letra.
 $("campo-local").addEventListener("input", atualizarLinksLocal);
 
-// Botão "Fazer outra verificação": volta para a tela inicial.
+// Voltar ao início.
 $("btn-recomecar").addEventListener("click", () => mostrarTela("inicio"));
 
-// Chat: abre e fecha a janela pelo botão flutuante e pelo X.
+// Chat: abre e fecha pela bolha flutuante e pelo X.
 $("abrir-chat").addEventListener("click", () => {
   const janela = $("janela-chat");
   const abrindo = janela.hidden;
@@ -374,9 +462,8 @@ $("abrir-chat").addEventListener("click", () => {
   $("abrir-chat").setAttribute("aria-expanded", String(abrindo));
   if (abrindo) {
     $("campo-chat").focus();
-    // Mensagem de boas-vindas só na primeira vez que a janela abre.
     if ($("mensagens").childElementCount === 0) {
-      adicionarBalao("Olá! Posso explicar como o site funciona ou tirar dúvidas sobre os direitos. Não sou advogado e não substituo o atendimento do CRAS ou da Defensoria.", "assistente");
+      adicionarBalao("Olá! Posso explicar como o site funciona e tirar dúvidas sobre os direitos. Não sou advogado e não substituo o CRAS, a Defensoria ou o INSS.", "assistente");
     }
   }
 });
@@ -385,5 +472,4 @@ $("fechar-chat").addEventListener("click", () => {
   $("abrir-chat").setAttribute("aria-expanded", "false");
 });
 
-// Envio do formulário do chat.
 $("form-chat").addEventListener("submit", enviarChat);
