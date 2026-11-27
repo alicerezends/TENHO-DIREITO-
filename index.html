@@ -1,0 +1,81 @@
+<!--
+  ARQUIVO: index.html
+  O QUE É: a página inteira. Tem duas partes:
+    1. Aceite: a pessoa marca a caixa e clica em Começar.
+    2. Chat: o assistente pergunta o benefício, faz as perguntas uma por uma,
+       mostra o resultado e encaminha para o CRAS e a Defensoria da regional dela.
+  COMO ABRIR: rode "python assistente.py" e acesse http://127.0.0.1:5000
+  (não dê dois cliques neste arquivo: sem o servidor o chat não funciona).
+  As cores ficam em style.css. A conversa fica em app.js. Os endereços ficam em unidades.js.
+-->
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <!-- Permite acentos e cedilha. -->
+  <meta charset="utf-8">
+  <!-- Ajusta a página ao celular. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tenho Direito?</title>
+  <!-- Visual do site (cores da logo, layout do chat). -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- CABEÇALHO: logo oficial do projeto. -->
+  <header class="topo">
+    <img class="topo__logo" src="logo.png" alt="Tenho Direito? – Educação previdenciária e assistencial por meio da tecnologia">
+  </header>
+
+  <main class="app">
+
+    <!-- TELA 1: ACEITE. O botão Começar só libera depois que a caixa é marcada. -->
+    <section id="tela-aceite" class="cartao">
+      <h1 class="cartao__titulo">Antes de começar</h1>
+      <label class="aceite" for="aceite">
+        <!-- Caixa em branco: a pessoa marca com a própria ação. -->
+        <input id="aceite" type="checkbox">
+        <span>
+          Concordo que as informações que eu digitar no chat (renda, moradia, composição familiar
+          e informações sobre deficiência ou saúde) sejam enviadas a um assistente de inteligência
+          artificial do Google para gerar a orientação. Entendo que o resultado não substitui a
+          análise do INSS, do CRAS ou da Defensoria.
+          <a href="#politica">Ver política de privacidade</a>
+        </span>
+      </label>
+      <button id="btn-comecar" class="botao" disabled>Começar</button>
+      <p class="nota">As respostas ficam só nesta conversa e somem ao fechar a página. Você pode sair a qualquer momento.</p>
+    </section>
+
+    <!-- TELA 2: CHAT. Escondido até o aceite. -->
+    <section id="tela-chat" class="chat" hidden>
+      <div class="chat__topo">
+        <span class="chat__aviso">Orientação, não substitui advogado, Defensoria, CRAS nem INSS.</span>
+        <button id="btn-recomecar" class="botao botao--linha">Recomeçar</button>
+      </div>
+
+      <!-- Mensagens da conversa. aria-live avisa leitores de tela sobre novas mensagens. -->
+      <div id="mensagens" class="mensagens" aria-live="polite"></div>
+
+      <!-- Opções clicáveis (Sim/Não, benefícios, regionais). O app.js preenche esta área. -->
+      <div id="acoes" class="acoes-chat"></div>
+
+      <!-- Campo de digitação: números nas perguntas, e perguntas livres depois do resultado. -->
+      <form id="form-chat" class="form-chat">
+        <input id="campo-chat" class="campo" type="text" autocomplete="off" placeholder="Digite sua resposta...">
+        <button id="btn-enviar" class="botao" type="submit">Enviar</button>
+      </form>
+    </section>
+
+  </main>
+
+  <footer class="rodape">
+    Ferramenta de educação e orientação. Não consulta sistemas do INSS, não concede benefícios
+    e não substitui atendimento jurídico.
+  </footer>
+
+  <!-- Endereços de CRAS e Defensorias. Precisa carregar antes do app.js. -->
+  <script src="unidades.js"></script>
+  <!-- Lógica da conversa. "defer" roda depois que a página está pronta. -->
+  <script src="app.js" defer></script>
+</body>
+</html>
