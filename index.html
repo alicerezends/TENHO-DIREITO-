@@ -1,0 +1,260 @@
+<!--
+  ARQUIVO: index.html
+  O QUE É: a página inteira. Seções:
+    1. Cabeçalho com a logo e os links (as abas do topo).
+    2. Apresentação com os cartões de benefício (começam o chat).
+    3. Como funciona (os três passos da solução).
+    4. Assistente: o termo aparece no chat e só depois do aceite a conversa começa.
+       Depois do aceite, a página mostra só o chat, com as abas do topo.
+    5. Onde buscar ajuda.
+  COMO ABRIR: rode "python assistente.py" e acesse http://127.0.0.1:5000
+  (não dê dois cliques neste arquivo: sem o servidor o chat não funciona).
+  Cores: style.css e a configuração do Tailwind abaixo. Conversa: app.js. Endereços: unidades.js.
+-->
+<!doctype html>
+<html lang="pt-BR" class="scroll-smooth">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tenho Direito? | Orientação de Benefícios Sociais e Previdenciários</title>
+
+  <!-- Fontes do site (títulos e texto de leitura). -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@700;800&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS (layout e cores). As cores da marca ficam aqui. -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              green: '#184E3A',
+              greenDark: '#103829',
+              greenLight: '#E9F2EE',
+              gold: '#E4B04A',
+              goldLight: '#FDF6E7',
+              navy: '#1E3446',
+              navyLight: '#475E72'
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Plus Jakarta Sans', 'sans-serif']
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- Visual próprio do chat e dos cartões. -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-white text-brand-navy font-sans antialiased">
+
+  <!-- =====================================================================
+       1. CABEÇALHO: logo e navegação (as abas do topo)
+       ===================================================================== -->
+  <header class="sticky top-0 z-50 bg-white/95 backdrop-blur border-b border-slate-200 shadow-sm">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between gap-3">
+      <a href="#" class="flex items-center shrink-0" aria-label="Início">
+        <img src="logo.png" alt="Tenho Direito? – Educação previdenciária e assistencial por meio da tecnologia" class="h-12 sm:h-14 w-auto">
+      </a>
+
+      <nav class="hidden md:flex items-center gap-8 text-[15px] font-semibold text-brand-navy">
+        <a href="#como-funciona" class="hover:text-brand-green transition-colors">Como funciona</a>
+        <a href="#beneficios" class="hover:text-brand-green transition-colors">Benefícios</a>
+        <a href="#onde-buscar-ajuda" class="hover:text-brand-green transition-colors">Onde buscar ajuda</a>
+      </nav>
+
+      <div class="flex items-center gap-2">
+        <!-- Aumenta o texto da página inteira (acessibilidade). Contorno verde, para não competir com o botão principal. -->
+        <button id="btn-fonte" onclick="toggleLargeText()" class="px-3 py-2 rounded-xl border-2 border-brand-green bg-white text-sm font-bold text-brand-green hover:bg-brand-greenLight transition-colors">
+          Aumentar letra
+        </button>
+        <a id="btn-iniciar" href="#assistente" class="bg-brand-green hover:bg-brand-greenDark text-white font-bold text-sm sm:text-base px-4 sm:px-6 py-3 rounded-xl shadow-md transition-all">
+          Iniciar consulta
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- =====================================================================
+       2. APRESENTAÇÃO + CARTÕES DE BENEFÍCIO
+       ===================================================================== -->
+  <section class="relative bg-gradient-to-b from-brand-greenLight/60 via-white to-white pt-10 pb-16 sm:pt-16 sm:pb-20 overflow-hidden">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 grid lg:grid-cols-12 gap-10 items-center">
+
+      <!-- Texto de apresentação -->
+      <div class="lg:col-span-7 text-center lg:text-left">
+        <span class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand-goldLight border border-brand-gold/40 font-semibold text-sm mb-6">
+          <span class="w-2.5 h-2.5 rounded-full bg-brand-green"></span>
+          100% gratuito • Linguagem simples • Sem cadastro
+        </span>
+        <h1 class="font-display font-extrabold text-3xl sm:text-5xl text-brand-green leading-tight tracking-tight mb-6">
+          Descubra seus direitos sociais e previdenciários de forma simples.
+        </h1>
+        <p class="text-lg sm:text-xl leading-relaxed mb-8 max-w-2xl mx-auto lg:mx-0">
+          Responda a algumas perguntas no assistente e veja se você ou sua família podem ter direito ao
+          <strong>BPC/LOAS</strong>, ao <strong>Bolsa Família</strong> ou à <strong>aposentadoria por idade</strong>.
+        </p>
+        <div class="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4">
+          <a href="#assistente" class="w-full sm:w-auto bg-brand-green hover:bg-brand-greenDark text-white font-bold text-lg px-8 py-4 rounded-2xl shadow-lg text-center">
+            Falar com o assistente agora
+          </a>
+          <a href="#como-funciona" class="w-full sm:w-auto bg-white hover:bg-slate-50 border-2 border-slate-200 font-bold px-6 py-4 rounded-2xl text-center">
+            Entender como funciona
+          </a>
+        </div>
+      </div>
+
+      <!-- Cartões de benefício. Ficam desligados até aceitar o termo no chat. -->
+      <div id="beneficios" class="lg:col-span-5 bg-white rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-100">
+        <div class="flex items-center gap-3 pb-5 mb-5 border-b border-slate-100">
+          <div class="w-12 h-12 rounded-2xl bg-brand-gold flex items-center justify-center text-xl">🛡️</div>
+          <div>
+            <h2 class="font-display font-bold text-lg text-brand-green">Benefícios avaliados</h2>
+            <p class="text-sm text-brand-navyLight">Aceite o termo no chat para testar</p>
+          </div>
+        </div>
+
+        <div class="space-y-3">
+          <button data-tema="bpc" disabled class="cartao-tema w-full text-left p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3">
+            <span class="flex items-center gap-3">
+              <span class="w-9 h-9 rounded-xl bg-brand-gold/25 flex items-center justify-center">♿</span>
+              <span><span class="block font-bold">BPC / LOAS</span><span class="block text-xs text-brand-navyLight">Pessoas idosas (65+) ou com deficiência de longo prazo</span></span>
+            </span>
+            <span class="text-brand-green text-xl">›</span>
+          </button>
+
+          <button data-tema="bolsa" disabled class="cartao-tema w-full text-left p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3">
+            <span class="flex items-center gap-3">
+              <span class="w-9 h-9 rounded-xl bg-brand-gold/25 flex items-center justify-center">🏠</span>
+              <span><span class="block font-bold">Bolsa Família e CadÚnico</span><span class="block text-xs text-brand-navyLight">Apoio para famílias de baixa renda</span></span>
+            </span>
+            <span class="text-brand-green text-xl">›</span>
+          </button>
+
+          <button data-tema="aposentadoria" disabled class="cartao-tema w-full text-left p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3">
+            <span class="flex items-center gap-3">
+              <span class="w-9 h-9 rounded-xl bg-brand-gold/25 flex items-center justify-center">🌅</span>
+              <span><span class="block font-bold">Aposentadoria por idade</span><span class="block text-xs text-brand-navyLight">Urbana ou rural, com base na contribuição ao INSS</span></span>
+            </span>
+            <span class="text-brand-green text-xl">›</span>
+          </button>
+
+          <button data-tema="cras" disabled class="cartao-tema w-full text-left p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3">
+            <span class="flex items-center gap-3">
+              <span class="w-9 h-9 rounded-xl bg-brand-gold/25 flex items-center justify-center">🤝</span>
+              <span><span class="block font-bold">Atendimento no CRAS</span><span class="block text-xs text-brand-navyLight">Orientação e encaminhamento para serviços da sua região</span></span>
+            </span>
+            <span class="text-brand-green text-xl">›</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =====================================================================
+       3. COMO FUNCIONA: os três passos da solução
+       ===================================================================== -->
+  <section id="como-funciona" class="bg-brand-greenLight/40 py-14 sm:py-20">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6">
+      <h2 class="font-display font-extrabold text-2xl sm:text-3xl text-brand-green text-center mb-10">Como funciona</h2>
+      <div class="grid md:grid-cols-3 gap-6">
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+          <div class="w-11 h-11 rounded-full bg-brand-gold text-brand-navy font-extrabold flex items-center justify-center mb-4">1</div>
+          <h3 class="font-bold text-lg mb-2">Responda no chat</h3>
+          <p class="text-brand-navyLight">O assistente faz perguntas simples, uma por vez, sobre a sua situação.</p>
+        </div>
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+          <div class="w-11 h-11 rounded-full bg-brand-gold text-brand-navy font-extrabold flex items-center justify-center mb-4">2</div>
+          <h3 class="font-bold text-lg mb-2">Veja a possibilidade</h3>
+          <p class="text-brand-navyLight">Você recebe uma orientação sobre a possível elegibilidade ao benefício escolhido.</p>
+        </div>
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+          <div class="w-11 h-11 rounded-full bg-brand-gold text-brand-navy font-extrabold flex items-center justify-center mb-4">3</div>
+          <h3 class="font-bold text-lg mb-2">Saiba onde ir</h3>
+          <p class="text-brand-navyLight">Informe seu endereço e o assistente indica o CRAS e a Defensoria mais perto, com telefone, horário e documentos.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =====================================================================
+       4. ASSISTENTE: termo e conversa, tudo no chat
+       ===================================================================== -->
+  <section id="assistente" class="py-14 sm:py-20 bg-white">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6">
+      <h2 class="pagina-titulo font-display font-extrabold text-2xl sm:text-3xl text-brand-green text-center mb-2">Assistente Tenho Direito?</h2>
+      <p class="pagina-titulo text-center text-brand-navyLight mb-8">Orientação gratuita. Não substitui advogado, Defensoria, CRAS nem INSS.</p>
+
+      <!-- Conversa. O app.js mostra o termo primeiro, e só depois as perguntas. -->
+      <div class="chat">
+        <div class="chat__cabecalho">
+          <div class="chat__avatar" aria-hidden="true">🤖</div>
+          <div class="flex-1">
+            <p class="font-display font-bold">Assistente Tenho Direito?</p>
+            <p class="text-xs opacity-90">Online agora • Atendimento acolhedor</p>
+          </div>
+          <button id="btn-recomecar" class="chat__recomecar">↺ Recomeçar</button>
+        </div>
+
+        <div id="mensagens" class="mensagens" aria-live="polite"></div>
+        <div id="acoes" class="acoes-chat"></div>
+
+        <form id="form-chat" class="form-chat">
+          <input id="campo-chat" class="campo" type="text" autocomplete="off" placeholder="Digite sua resposta..." disabled>
+          <button id="btn-enviar" class="botao" type="submit" disabled>Enviar</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- =====================================================================
+       5. ONDE BUSCAR AJUDA
+       ===================================================================== -->
+  <section id="onde-buscar-ajuda" class="py-12 bg-brand-greenLight/40">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 text-center">
+      <h2 class="font-display font-bold text-xl text-brand-green mb-3">Onde buscar ajuda</h2>
+      <p class="text-brand-navyLight">
+        Ao final de cada consulta, o assistente indica o CRAS e as Defensorias Públicas de Belo Horizonte,
+        com telefone, endereço, horário e rota.
+      </p>
+    </div>
+  </section>
+
+  <footer class="bg-white border-t border-slate-200 py-8 px-4 text-center text-sm text-brand-navyLight">
+    <p class="mb-2">
+      <strong>As orientações não substituem análise profissional nem decisão de órgãos públicos.</strong>
+    </p>
+    <p>Ferramenta de educação e orientação. Não consulta sistemas do INSS e não concede benefícios.</p>
+  </footer>
+
+  <!-- Endereços de CRAS e Defensorias. Precisa carregar antes do app.js. -->
+  <script src="unidades.js"></script>
+  <!-- Lógica da conversa. "defer" roda depois que a página está pronta. -->
+  <script src="app.js" defer></script>
+
+  <script>
+    // Aumenta ou diminui o texto da página inteira.
+    function toggleLargeText() {
+      const grande = document.documentElement.classList.toggle('texto-grande');
+      document.getElementById('btn-fonte').textContent = grande ? 'Texto normal' : 'Aumentar letra';
+    }
+
+    // Com o chat na tela inteira, as abas do topo mostram a página de novo.
+    // "Iniciar consulta" volta ao chat, se o termo já foi aceito.
+    document.querySelectorAll('header nav a, header a[aria-label="Início"]').forEach((link) => {
+      link.addEventListener('click', () => document.body.classList.remove('modo-chat'));
+    });
+    document.getElementById('btn-iniciar').addEventListener('click', () => {
+      if (!document.getElementById('campo-chat').disabled) {
+        document.body.classList.add('modo-chat');
+      }
+    });
+  </script>
+</body>
+</html>
