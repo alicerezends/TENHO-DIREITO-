@@ -1,157 +1,166 @@
-"""
-ARQUIVO: assistente.py
-O QUE É: o servidor do site. Ele faz duas coisas:
-  1. Entrega os arquivos da página (index.html, style.css, app.js) ao navegador.
-  2. Recebe a dúvida do chat, envia para a API do Gemini e devolve a resposta.
+<!--
+  ARQUIVO: index.html
+  O QUE É: a estrutura (esqueleto) da página. Aqui ficam as "telas" do site:
+    1. Início: a pessoa escolhe qual direito quer verificar.
+    2. Perguntas: uma pergunta por vez, de acordo com o direito escolhido.
+    3. Resultado: mostra as possibilidades, documentos e onde ir.
+    4. Assistente: um chat para tirar dúvidas (usa a API do Gemini pelo servidor).
+  COMO FUNCIONA: este arquivo só descreve o que aparece. As cores ficam em style.css,
+  a lógica (perguntas, cálculos e conversa) fica em app.js.
+-->
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <!-- Codificação de caracteres: permite acentos e cedilha (ç, ã, é). -->
+  <meta charset="utf-8">
+  <!-- Faz a página se ajustar bem ao celular. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Título que aparece na aba do navegador. -->
+  <title>Tenho Direito?</title>
+  <!-- Ligação com o arquivo de estilo (cores, tamanhos, layout). -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
 
-POR QUE EXISTE: a chave da API é um segredo. Se ela ficasse no app.js,
-qualquer pessoa que abrisse o código do site poderia copiá-la e usar a sua conta.
-Por isso a chave fica aqui no servidor, lida de uma variável de ambiente.
+  <!-- CABEÇALHO: faixa de topo com o nome do projeto e a frase de apresentação. -->
+  <header class="topo">
+    <div class="topo__marca">
+      <!-- Ícone simples feito com um símbolo (não precisa de imagem externa). -->
+      <span class="topo__icone" aria-hidden="true">⚖</span>
+      <div>
+        <h1 class="topo__titulo">Tenho Direito?</h1>
+        <p class="topo__sub">Descubra quais benefícios podem ser para você. Gratuito e sem complicação.</p>
+      </div>
+    </div>
+  </header>
 
-COMO RODAR (no terminal, dentro da pasta do projeto):
-  1. pip install flask requests
-  2. Defina a chave (sem colocá-la no código):
-       Windows (PowerShell):  $env:GEMINI_API_KEY="SUA_CHAVE"
-       Linux/Mac:             export GEMINI_API_KEY="SUA_CHAVE"
-  3. python assistente.py
-  4. Abra no navegador: http://127.0.0.1:5000
-"""
+  <main class="container">
 
-import os
+    <!-- AVISO FIXO: lembra sempre que o site orienta, mas não substitui advogado nem o INSS. -->
+    <div class="aviso" role="note">
+      <span class="aviso__icone" aria-hidden="true">i</span>
+      <p>
+        <strong>Importante:</strong> este é um assistente virtual de orientação.
+        Ele não substitui advogado, defensor público nem a análise oficial do INSS
+        ou da assistência social. O resultado mostra <em>possibilidades</em>, não garante benefício.
+      </p>
+    </div>
 
-import requests
-from flask import Flask, jsonify, request, send_from_directory
+    <!-- CONSENTIMENTO: antes de liberar os direitos, a pessoa precisa marcar a caixa.
+         Os dados digitados vão ao assistente de IA (Google Gemini), por isso o aceite é específico. -->
+    <section class="tela consentimento" aria-labelledby="titulo-consent">
+      <h2 id="titulo-consent" class="tela__titulo">Antes de começar</h2>
+      <label class="aceite" for="aceite">
+        <!-- Caixa em branco: a pessoa precisa marcar com a própria ação. -->
+        <input id="aceite" type="checkbox">
+        <span>
+          Concordo que as informações que eu digitar (renda, moradia, composição familiar
+          e informações sobre deficiência ou saúde) sejam enviadas a um assistente de
+          inteligência artificial do Google para gerar a orientação. Entendo que o resultado
+          não substitui a análise do INSS, do CRAS ou da Defensoria.
+          <a href="#politica">Ver política de privacidade</a>
+        </span>
+      </label>
+      <p class="nota">As respostas ficam só nesta tela e somem ao fechar a página. Você pode sair a qualquer momento.</p>
+    </section>
 
-# Pasta onde este arquivo está. Usada para achar index.html, style.css e app.js.
-PASTA = os.path.dirname(os.path.abspath(__file__))
+    <!-- TELA 1: INÍCIO. Os quatro botões grandes, um para cada direito. -->
+    <section id="tela-inicio" class="tela" aria-labelledby="titulo-inicio">
+      <h2 id="titulo-inicio" class="tela__titulo">O que você quer verificar?</h2>
+      <p class="tela__texto">Escolha uma opção. Você responde algumas perguntas simples.</p>
 
-# Cria a aplicação web. "static_folder=None" evita a pasta padrão do Flask,
-# já que servimos os arquivos diretamente da pasta do projeto.
-app = Flask(__name__, static_folder=None)
+      <!-- Cada botão tem o atributo data-direito; o app.js usa isso para saber qual fluxo abrir. -->
+      <div class="grade-direitos">
+        <button class="cartao-direito" data-direito="bolsa">
+          <span class="cartao-direito__icone" aria-hidden="true">🏠</span>
+          <span class="cartao-direito__nome">Bolsa Família</span>
+          <span class="cartao-direito__desc">Ajuda de renda para famílias de baixa renda.</span>
+        </button>
+        <button class="cartao-direito" data-direito="bpc">
+          <span class="cartao-direito__icone" aria-hidden="true">♿</span>
+          <span class="cartao-direito__nome">BPC</span>
+          <span class="cartao-direito__desc">Para pessoas idosas (65 anos ou mais) ou com deficiência de longo prazo.</span>
+        </button>
+        <button class="cartao-direito" data-direito="aposentadoria">
+          <span class="cartao-direito__icone" aria-hidden="true">🌅</span>
+          <span class="cartao-direito__nome">Aposentadoria</span>
+          <span class="cartao-direito__desc">Verifique possibilidades com base na contribuição ao INSS.</span>
+        </button>
+        <button class="cartao-direito" data-direito="cras">
+          <span class="cartao-direito__icone" aria-hidden="true">🤝</span>
+          <span class="cartao-direito__nome">Atendimento no CRAS</span>
+          <span class="cartao-direito__desc">Orientação e encaminhamento para serviços da sua região.</span>
+        </button>
+      </div>
+    </section>
 
-# Endereço da API do Google Gemini (modelo de texto).
-# O nome do modelo pode mudar com o tempo: confira em https://ai.google.dev
-URL_GEMINI = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+    <!-- TELA 2: PERGUNTAS. Fica escondida (hidden) até a pessoa escolher um direito. -->
+    <section id="tela-perguntas" class="tela" hidden aria-live="polite">
+      <!-- Barra de progresso: o app.js aumenta a largura conforme a pessoa avança. -->
+      <div class="progresso" aria-hidden="true">
+        <div id="progresso-barra" class="progresso__barra"></div>
+      </div>
+      <p id="progresso-texto" class="progresso__texto"></p>
 
-# Limite de tamanho da mensagem, para evitar abuso e custos.
-TAMANHO_MAXIMO_MENSAGEM = 500
+      <h2 id="pergunta-titulo" class="tela__titulo"></h2>
+      <!-- Aqui o app.js coloca o campo de número ou os botões Sim/Não. -->
+      <div id="pergunta-corpo"></div>
 
-# Instruções fixas dadas ao modelo. Definem como ele deve se comportar.
-INSTRUCOES_SISTEMA = """
-Você é um assistente virtual de orientação sobre direitos sociais no Brasil
-(Bolsa Família, BPC, aposentadoria do INSS e atendimento no CRAS).
+      <div class="acoes">
+        <button id="btn-voltar" class="botao botao--secundario">Voltar</button>
+        <button id="btn-proximo" class="botao">Próxima</button>
+      </div>
+    </section>
 
-Regras obrigatórias:
-- Responda em português, de forma simples e acolhedora, em poucas frases.
-- Você NÃO é advogado e NÃO substitui defensor público, CRAS ou INSS.
-  Sempre que for uma questão individual, oriente a procurar o CRAS ou a Defensoria.
-- Não prometa benefício nem diga que a pessoa "com certeza" tem direito.
-- Não peça nem registre dados pessoais como CPF, endereço completo ou número de documento.
-- Se a pergunta não for sobre direitos sociais, diga gentilmente que só pode ajudar com esse tema.
-"""
+    <!-- TELA 3: RESULTADO. Preenchida pelo app.js com o que a pessoa respondeu. -->
+    <section id="tela-resultado" class="tela" hidden>
+      <h2 class="tela__titulo">Seu resultado</h2>
+      <div id="resultado-corpo"></div>
 
+      <h3 class="subtitulo">Documentos que costumam ser pedidos</h3>
+      <ul id="lista-documentos" class="lista-documentos"></ul>
+      <p class="nota">A lista pode variar. Confirme com o CRAS ou a Defensoria antes de ir.</p>
 
-def perguntar_ao_gemini(mensagem, historico):
-    """
-    Envia a pergunta ao Gemini e devolve o texto da resposta.
+      <h3 class="subtitulo">Onde ir</h3>
+      <!-- O app.js liga este campo aos links de mapa: quando a pessoa digita, os links mudam. -->
+      <label class="rotulo" for="campo-local">Seu bairro ou CEP</label>
+      <input id="campo-local" class="campo" type="text" placeholder="Ex.: Centro, 30000-000">
+      <div id="links-local" class="links-local"></div>
 
-    Parâmetros:
-      mensagem  -> texto que a pessoa digitou no chat.
-      historico -> lista das últimas mensagens, para a conversa ter contexto.
+      <div class="acoes">
+        <button id="btn-recomecar" class="botao botao--secundario">Fazer outra verificação</button>
+      </div>
+    </section>
 
-    Devolve uma tupla (texto, erro). Se der certo, erro é None.
-    """
-    chave = os.environ.get("GEMINI_API_KEY")
-    if not chave:
-        # Sem chave, o assistente não funciona. Avisa quem está rodando o servidor.
-        return None, "A chave do assistente não está configurada no servidor."
+  </main>
 
-    # Monta a conversa no formato que a API espera: uma lista de "conteudos".
-    conteudos = []
-    for item in historico:
-        # A API usa "user" para a pessoa e "model" para o assistente.
-        papel = "user" if item.get("papel") == "usuario" else "model"
-        conteudos.append({"role": papel, "parts": [{"text": item.get("texto", "")}]})
-    conteudos.append({"role": "user", "parts": [{"text": mensagem}]})
+  <!-- ASSISTENTE: botão flutuante no canto que abre a janela de chat. -->
+  <button id="abrir-chat" class="chat-flutuante" aria-controls="janela-chat" aria-expanded="false">
+    💬 Tirar uma dúvida
+  </button>
 
-    corpo = {
-        # Instruções de comportamento, separadas da conversa.
-        "system_instruction": {"parts": [{"text": INSTRUCOES_SISTEMA}]},
-        "contents": conteudos,
-        # Controla a criatividade e o tamanho da resposta.
-        "generationConfig": {"temperature": 0.3, "maxOutputTokens": 400},
-    }
+  <!-- JANELA DO CHAT: começa fechada. O app.js abre e fecha pelo botão acima. -->
+  <aside id="janela-chat" class="janela-chat" hidden aria-label="Assistente virtual">
+    <header class="janela-chat__topo">
+      <strong>Assistente virtual</strong>
+      <button id="fechar-chat" class="janela-chat__fechar" aria-label="Fechar">×</button>
+    </header>
+    <!-- Onde as mensagens aparecem. -->
+    <div id="mensagens" class="mensagens"></div>
+    <!-- Campo de digitação e botão de enviar. -->
+    <form id="form-chat" class="form-chat">
+      <input id="campo-chat" class="campo campo--chat" type="text" maxlength="500"
+             placeholder="Escreva sua dúvida..." autocomplete="off">
+      <button class="botao botao--chat" type="submit">Enviar</button>
+    </form>
+  </aside>
 
-    try:
-        resposta = requests.post(
-            URL_GEMINI,
-            # A chave vai no cabeçalho, não na URL, para não aparecer em registros de acesso.
-            headers={"x-goog-api-key": chave, "Content-Type": "application/json"},
-            json=corpo,
-            timeout=20,  # desiste depois de 20 segundos para não deixar a pessoa esperando
-        )
-        resposta.raise_for_status()  # gera erro se a API respondeu com falha (ex.: 400, 429, 500)
-        dados = resposta.json()
+  <footer class="rodape">
+    Ferramenta de educação e orientação. Não consulta sistemas do INSS, não concede benefícios
+    e não substitui atendimento jurídico.
+  </footer>
 
-        # O texto fica em dados["candidates"][0]["content"]["parts"][0]["text"].
-        texto = dados["candidates"][0]["content"]["parts"][0]["text"]
-        return texto.strip(), None
-
-    except requests.Timeout:
-        return None, "A resposta demorou demais. Tente novamente."
-    except requests.RequestException:
-        # Qualquer falha de rede ou da API cai aqui. Não mostramos detalhes técnicos à pessoa.
-        return None, "Não consegui falar com o assistente agora."
-    except (KeyError, IndexError, ValueError):
-        # A API respondeu, mas em formato inesperado (ex.: resposta bloqueada por segurança).
-        return None, "O assistente não conseguiu responder essa pergunta. Tente reformular."
-
-
-@app.route("/")
-def pagina_inicial():
-    """Entrega a página principal (index.html) quando alguém abre o endereço do site."""
-    return send_from_directory(PASTA, "index.html")
-
-
-@app.route("/<path:arquivo>")
-def arquivos_do_site(arquivo):
-    """
-    Entrega os demais arquivos do site (style.css, app.js).
-    Só serve arquivos de extensões conhecidas, para não expor o código do servidor.
-    """
-    permitidos = {".html", ".css", ".js"}
-    extensao = os.path.splitext(arquivo)[1].lower()
-    if extensao not in permitidos:
-        return jsonify({"erro": "Arquivo não encontrado."}), 404
-    return send_from_directory(PASTA, arquivo)
-
-
-@app.route("/api/chat", methods=["POST"])
-def api_chat():
-    """
-    Recebe a pergunta do chat (em JSON) e devolve a resposta do assistente.
-    Entrada esperada: {"mensagem": "...", "historico": [...]}
-    Saída: {"resposta": "..."} ou {"erro": "..."} com status de erro.
-    """
-    dados = request.get_json(silent=True) or {}
-    mensagem = (dados.get("mensagem") or "").strip()
-    historico = dados.get("historico") or []
-
-    # Validações simples antes de gastar a API.
-    if not mensagem:
-        return jsonify({"erro": "Escreva uma pergunta."}), 400
-    if len(mensagem) > TAMANHO_MAXIMO_MENSAGEM:
-        return jsonify({"erro": "A pergunta está muito longa. Resuma e tente de novo."}), 400
-    if not isinstance(historico, list):
-        historico = []
-
-    texto, erro = perguntar_ao_gemini(mensagem, historico)
-    if erro:
-        return jsonify({"erro": erro}), 502  # 502 = o serviço externo falhou
-    return jsonify({"resposta": texto})
-
-
-if __name__ == "__main__":
-    # debug=False: em produção não mostra detalhes internos do erro para o público.
-    # Porta 5000 é o padrão local. host 127.0.0.1 deixa o site acessível só nesta máquina.
-    app.run(host="127.0.0.1", port=5000, debug=False)
+  <!-- Carrega a lógica do site. "defer" faz o script rodar depois que a página está pronta. -->
+  <script src="app.js" defer></script>
+</body>
+</html>
