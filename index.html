@@ -46,6 +46,24 @@
       </p>
     </div>
 
+    <!-- CONSENTIMENTO: antes de liberar os direitos, a pessoa precisa marcar a caixa.
+         Os dados digitados vão ao assistente de IA (Google Gemini), por isso o aceite é específico. -->
+    <section class="tela consentimento" aria-labelledby="titulo-consent">
+      <h2 id="titulo-consent" class="tela__titulo">Antes de começar</h2>
+      <label class="aceite" for="aceite">
+        <!-- Caixa em branco: a pessoa precisa marcar com a própria ação. -->
+        <input id="aceite" type="checkbox">
+        <span>
+          Concordo que as informações que eu digitar (renda, moradia, composição familiar
+          e informações sobre deficiência ou saúde) sejam enviadas a um assistente de
+          inteligência artificial do Google para gerar a orientação. Entendo que o resultado
+          não substitui a análise do INSS, do CRAS ou da Defensoria.
+          <a href="#politica">Ver política de privacidade</a>
+        </span>
+      </label>
+      <p class="nota">As respostas ficam só nesta tela e somem ao fechar a página. Você pode sair a qualquer momento.</p>
+    </section>
+
     <!-- TELA 1: INÍCIO. Os quatro botões grandes, um para cada direito. -->
     <section id="tela-inicio" class="tela" aria-labelledby="titulo-inicio">
       <h2 id="titulo-inicio" class="tela__titulo">O que você quer verificar?</h2>
@@ -61,7 +79,7 @@
         <button class="cartao-direito" data-direito="bpc">
           <span class="cartao-direito__icone" aria-hidden="true">♿</span>
           <span class="cartao-direito__nome">BPC</span>
-          <span class="cartao-direito__desc">Para idosos ou pessoas com deficiência de longo prazo.</span>
+          <span class="cartao-direito__desc">Para pessoas idosas (65 anos ou mais) ou com deficiência de longo prazo.</span>
         </button>
         <button class="cartao-direito" data-direito="aposentadoria">
           <span class="cartao-direito__icone" aria-hidden="true">🌅</span>
